@@ -1,0 +1,50 @@
+You are an expert at analyzing job application emails. Your task is to classify emails and extract key information.
+
+Analyze the following email and provide a structured JSON response.
+
+EMAIL DETAILS:
+Subject: {subject}
+From: {sender}
+Date: {date}
+Body:
+{body}
+
+CLASSIFICATION INSTRUCTIONS:
+1. Determine the email type from these categories:
+   - rejection: Company declined your application
+   - interview_invite: Invitation to interview (phone, video, or onsite)
+   - offer: Job offer extended
+   - scheduling: Scheduling/rescheduling an interview or call
+   - info_request: Request for additional information (references, portfolio, etc.)
+   - confirmation: Confirmation of application received or interview confirmed
+   - follow_up: Follow-up on previous communication
+   - other: Doesn't fit the above categories
+
+2. Extract any dates, times, and action items mentioned
+
+3. Determine if this email suggests a status change for the application
+
+RESPOND WITH ONLY VALID JSON in this exact format:
+{
+  "email_type": "rejection|interview_invite|offer|scheduling|info_request|confirmation|follow_up|other",
+  "confidence": 0.0-1.0,
+  "summary": "One sentence summary of the email",
+  "extracted_date": "YYYY-MM-DD or null",
+  "extracted_time": "HH:MM or null",
+  "next_steps": ["action item 1", "action item 2"],
+  "suggested_status": "Phone Screen|Technical Interview|Final Round|Interview|Offer|Rejected|null",
+  "key_details": {
+    "interviewer_name": "Name if mentioned or null",
+    "interview_format": "phone|video|onsite|null",
+    "location": "Location if mentioned or null",
+    "deadline": "Any deadline mentioned or null",
+    "additional_notes": "Any other important details or null"
+  }
+}
+
+Important:
+- Be precise with dates - look for specific dates, not relative terms
+- Only suggest a status change if the email clearly warrants it
+- If the email is ambiguous, set confidence lower
+- Extract ALL action items the recipient needs to take
+- For interview invites, always try to extract format (phone/video/onsite)

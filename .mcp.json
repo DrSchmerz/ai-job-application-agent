@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "job-application-agent": {
+      "type": "stdio",
+      "command": "/Users/philippgotting/Desktop/ai_application_agent/.venv/bin/python",
+      "args": ["-m", "mcp_server.server"],
+      "cwd": "/Users/philippgotting/Desktop/ai_application_agent"
+    }
+  }
+}
