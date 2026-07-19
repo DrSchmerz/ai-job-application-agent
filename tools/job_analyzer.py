@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from db.session import SessionLocal
 from db.models import Application
+from core.matching import skill_in_text
 from tools.local_analyzer import (
     load_cv_summary, tokenize, extract_keywords,
     TECH_KEYWORDS, BUSINESS_KEYWORDS
@@ -211,23 +212,23 @@ def analyze_job(application: Application, cv_text: str = None) -> Dict:
     # Extract requirements
     requirements = extract_requirements(application.job_description or "")
 
-    # Calculate CV match
+    # Calculate CV match (boundary-aware — see core.matching.skill_in_text)
     required_match = []
     required_gap = []
     for skill in requirements["required_skills"]:
-        if skill.lower() in cv_lower:
+        if skill_in_text(skill, cv_lower):
             required_match.append(skill)
         else:
             required_gap.append(skill)
 
     nice_match = []
     for skill in requirements["nice_to_have"]:
-        if skill.lower() in cv_lower:
+        if skill_in_text(skill, cv_lower):
             nice_match.append(skill)
 
     business_match = []
     for skill in requirements["business_skills"]:
-        if skill.lower() in cv_lower:
+        if skill_in_text(skill, cv_lower):
             business_match.append(skill)
 
     # Calculate fit score
