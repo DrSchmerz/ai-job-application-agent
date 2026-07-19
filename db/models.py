@@ -5,10 +5,24 @@ from datetime import datetime
 Base = declarative_base()
 
 
+class User(Base):
+    """A registered user (multi-user / friends-beta)."""
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True)
+    email = Column(String, unique=True, nullable=False, index=True)
+    password_hash = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    applications = relationship("Application", back_populates="user")
+
+
 class Application(Base):
     __tablename__ = "applications"
 
     id = Column(Integer, primary_key=True)
+    # Owner (nullable so pre-existing single-user rows still load).
+    user_id = Column(Integer, ForeignKey("users.id"), index=True, nullable=True)
     company = Column(String, nullable=False)
     role = Column(String)
     job_url = Column(String)                    # URL to job posting
@@ -33,7 +47,8 @@ class Application(Base):
     last_contact = Column(Date)                 # For follow-ups
     notes = Column(Text)
 
-    # Relationship to history
+    # Relationships
+    user = relationship("User", back_populates="applications")
     history = relationship("ApplicationHistory", back_populates="application", order_by="ApplicationHistory.created_at.desc()")
 
 
