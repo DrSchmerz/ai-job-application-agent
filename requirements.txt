@@ -1,0 +1,42 @@
+# AI Job Application Agent — dependencies
+# Python 3.13 (built/tested on 3.13.x)
+# Versions pinned to the last known-good environment.
+
+# --- Web UI ---
+streamlit==1.53.1
+
+# --- LLM providers ---
+openai==2.16.0
+groq==1.0.0
+google-generativeai==0.8.6
+
+# --- MCP server ---
+mcp==1.26.0
+
+# --- Database ---
+SQLAlchemy==2.0.46
+
+# --- Data / ML ---
+pandas==2.3.3
+scikit-learn==1.8.0
+
+# --- Web scraping / HTTP ---
+beautifulsoup4==4.14.3
+requests==2.32.5
+
+# --- Scheduling ---
+APScheduler==3.11.2
+
+# --- CLI / terminal output ---
+typer==0.21.1
+rich==14.3.1
+
+# --- Excel export ---
+openpyxl==3.1.5
+
+# --- Config / secrets ---
+python-dotenv==1.2.1
+
+# Optional, platform-specific (imported lazily, safe to omit):
+#   anthropic          # alternative LLM provider, guarded by try/except
+#   win10toast         # Windows desktop notifications only

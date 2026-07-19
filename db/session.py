@@ -1,8 +1,13 @@
+import os
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 from db.models import Base
 
-engine = create_engine("sqlite:///applications.db")
+# DB location is configurable via APP_DB_PATH so a demo/seed DB can be used
+# without touching your real applications.db. Defaults to the original path.
+DB_PATH = os.getenv("APP_DB_PATH", "applications.db")
+engine = create_engine(f"sqlite:///{DB_PATH}")
 SessionLocal = sessionmaker(bind=engine)
 
 

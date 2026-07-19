@@ -1,7 +1,33 @@
-.venv/
-.env
+# --- Python ---
 __pycache__/
-*.db
-.streamlit/
-.DS_Store
 *.pyc
+*.pyo
+.venv/
+venv/
+.venv_broken_old/
+
+# --- Secrets & config ---
+.env
+.env.local
+*.key
+
+# --- Databases (local + demo) ---
+*.db
+*.sqlite3
+
+# --- Personal data (NEVER commit real job-hunt data) ---
+data/applications/
+data/cover_letters/
+data/cv/
+data/cv_summary.txt
+data/job_urls.txt
+# ...but DO ship the sample/example scaffolding:
+!data/sample/
+!data/*.example.txt
+
+# --- Streamlit / OS / editors ---
+.streamlit/secrets.toml
+.DS_Store
+.idea/
+.vscode/
+*.swp

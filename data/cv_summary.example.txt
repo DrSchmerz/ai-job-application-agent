@@ -1,0 +1,23 @@
+Alex Sample — Data & AI Professional
+
+Professional background:
+Master's graduate in Data Science with 2 years of experience building data
+pipelines and machine-learning prototypes. Comfortable across the stack, from
+SQL and Python to shipping small web apps.
+
+Key technical skills:
+Python, SQL, pandas, scikit-learn, Streamlit, Docker, Git, basic cloud (AWS/GCP).
+
+Key business skills:
+Stakeholder communication, requirements gathering, turning ambiguous problems
+into shippable prototypes.
+
+Notable achievements:
+- Built an internal analytics dashboard adopted by 3 teams.
+- Automated a manual reporting process, saving ~5 hours/week.
+
+Languages:
+English (fluent), German (native).
+
+NOTE: This is fake sample data so the app runs out-of-the-box for a demo.
+Replace `data/cv_summary.txt` with your own CV summary (that file is gitignored).

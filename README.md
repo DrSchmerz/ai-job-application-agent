@@ -1,122 +1,113 @@
 # 🎯 AI Job Application Agent
 
-AI-powered job application tracker with interview prep, smart recommendations, and visual pipeline management.
+An AI-powered assistant that manages a full job search end-to-end: track applications,
+generate tailored cover letters, analyse job–CV fit, ingest and classify recruiter
+emails, and prepare for interviews — all from one local Streamlit app.
 
-## 🚀 Quick Start
+Built as a personal project to explore multi-provider LLM orchestration, the
+[Model Context Protocol (MCP)](https://modelcontextprotocol.io), and a clean
+data layer around a real-world workflow.
+
+> **Privacy note:** this repo ships **no personal data**. Your applications,
+> cover letters, CV and API keys live in git-ignored files. A one-command demo
+> seeds realistic **fake** data so you can try it immediately.
+
+---
+
+## ✨ Features
+
+- **Multi-provider AI** — Groq, Google Gemini, OpenAI, with an offline keyword
+  fallback and an `auto` mode that picks the best available provider.
+- **Cover-letter generation** tailored to a job description + your CV summary.
+- **Job–CV fit analysis** — score, matched skills, gaps, recommendation.
+- **Application tracker** — SQLite-backed, with a full change-history audit trail.
+- **Email intelligence** — scan a Gmail inbox, classify messages
+  (rejection / interview / offer / scheduling) with an LLM, and auto-update statuses.
+- **Interview prep** — practice questions, company research, feedback tracking.
+- **Calendar export** — interviews to `.ics`.
+- **MCP server** — exposes the agent's tools over the Model Context Protocol.
+- **Streamlit UI** — Dashboard, Applications (table / cards / kanban), Email,
+  CV & Insights, Settings.
+
+## 🏗️ Architecture
+
+```
+┌────────────┐     ┌──────────────────┐     ┌───────────────────────────────┐
+│ Streamlit  │────▶│ ApplicationAgent │────▶│ LLM providers                 │
+│ UI (ui/)   │     │ (agent/)         │     │ groq · gemini · openai · local│
+└─────┬──────┘     └──────┬───────────┘     └───────────────────────────────┘
+      │                   │
+      ▼                   ▼
+┌────────────┐     ┌──────────────────┐     ┌──────────────┐
+│ tools/     │     │ db/ (SQLAlchemy) │────▶│ SQLite       │
+│ email·jobs │     │ models·session   │     │ applications │
+└────────────┘     └──────────────────┘     └──────────────┘
+      ▲
+      │
+┌────────────┐
+│ mcp_server/│  Model Context Protocol tools
+└────────────┘
+```
+
+## 🚀 Quick start
 
 ```bash
+# 1. Create the environment (Python 3.13)
+python3.13 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+# 2. Configure secrets
+cp .env.example .env         # then add your API keys (all optional; "local" needs none)
+
+# 3a. Try it with demo data (recommended first run)
+python scripts/seed_demo_data.py
+APP_DB_PATH=applications_demo.db streamlit run ui/app.py
+
+# 3b. …or run against your own data
+cp data/cv_summary.example.txt data/cv_summary.txt   # then edit with your CV
 ./run_ui.sh
 ```
 
-Opens at `http://localhost:8501`
+App opens at http://localhost:8501.
 
-## ✨ Key Features
+## ⚙️ Configuration
 
-- **🎯 Smart Recommendations** - AI suggests next actions
-- **📊 Kanban Board** - Visual pipeline view
-- **⚡ 10x Faster** - Database-indexed queries
-- **🔍 Enhanced Search** - Search everywhere (descriptions, notes, cover letters)
-- **🎯 Interview Prep** - 30+ practice questions, company research, feedback tracking
-- **📅 Calendar Integration** - Export interviews to calendar (.ics files)
-- **🎛️ Bulk Operations** - Select multiple, update/delete at once
-- **📊 Visual Charts** - Interactive analytics dashboard
+All configuration is via environment variables (see `.env.example`):
 
-## 🎯 Quick Tour (2 Minutes)
+| Variable | Purpose |
+|---|---|
+| `OPENAI_API_KEY` / `GROQ_API_KEY` / `GOOGLE_API_KEY` | LLM providers (any subset) |
+| `DEFAULT_LLM_PROVIDER` | `local` \| `groq` \| `google` \| `openai` \| `auto` |
+| `GMAIL_EMAIL` / `GMAIL_APP_PASSWORD` | optional Gmail integration (use an App Password) |
+| `APP_DB_PATH` | SQLite file to use (defaults to `applications.db`) |
 
-1. **Dashboard** → See AI recommendations & charts
-2. **Applications** → Try Kanban Board view
-3. **Click any Interview-stage app** → Interview Prep tab
-4. **Try Quick Filters** → Active, High Priority, Awaiting Response
-
-## 📖 Main Features
-
-### Applications Management
-- 3 view modes: Table, Cards, Kanban Board
-- Quick filters (one-click)
-- Bulk operations
-- Enhanced search across all fields
-- 10x performance boost
-
-### Interview Preparation
-- Company research templates
-- 30+ practice questions (behavioral, technical, role-specific)
-- Answer preparation & confidence tracking
-- Practice timer
-- Post-interview feedback
-
-### Smart Features
-- AI-powered recommendations
-- Visual analytics (3 charts)
-- Calendar integration (.ics export)
-- Email automation (optional)
-- Target companies tracking
-
-## 🛠️ Setup
-
-```bash
-# Install dependencies
-pip install -r requirements.txt
-
-# Launch
-./run_ui.sh
-```
-
-### Optional: Email Automation
-Create `.env` file:
-```bash
-GMAIL_EMAIL=your.email@gmail.com
-GMAIL_APP_PASSWORD=your_app_password
-```
-
-## 💡 Pro Tips
-
-1. **Check Dashboard daily** - See what needs attention
-2. **Use Kanban view** - Best pipeline visualization
-3. **Bulk operations** - Weekly cleanup of old apps
-4. **Interview Prep early** - 24 hours before interviews
-5. **Quick Filters** - Faster than manual filtering
-
-## 📁 Structure
+## 📁 Project layout
 
 ```
-ai_application_agent/
-├── ui/app.py              # Main app
-├── agent/agent.py         # Core logic
-├── tools/                 # Analysis & automation
-├── utils/                 # Calendar, recommendations
-├── db/                    # Database models
-└── cv/cv.md              # Your CV (customize this!)
+agent/        Multi-provider AI agent (cover letters, fit analysis)
+ui/           Streamlit app — page functions + components
+tools/        Email tracking/analysis, job scraping & search
+db/           SQLAlchemy models, session, migrations
+mcp_server/   MCP server exposing agent tools
+scripts/      Utilities (e.g. seed_demo_data.py)
+cli/          Command-line interface
+data/         Local data (git-ignored; *.example.* files are shipped)
 ```
 
-## 🆘 Troubleshooting
+## 🛠️ Tech stack
 
-**App won't start:**
-```bash
-pip install -r requirements.txt
-streamlit run ui/app.py
-```
+Python 3.13 · Streamlit · SQLAlchemy + SQLite · OpenAI / Groq / Google Gemini SDKs ·
+Model Context Protocol · pandas · scikit-learn
 
-**Slow performance:**
-```bash
-python db/add_indexes.py
-```
+## 🗺️ Roadmap
 
-## 📚 More Documentation
+- [ ] Unify provider logic behind a single `LLMProvider` interface
+- [ ] Structured logging (replace prints) + `pytest` test suite + CI
+- [ ] Migrate `google-generativeai` → `google-genai`
+- [ ] Dockerfile + Compose for one-command run and deployment
+- [ ] Semantic (embedding-based) job–CV fit scoring
 
-- `QUICK_START.md` - Detailed feature tour
-- `ARCHITECTURE.md` - System design
-- `AUTOMATION_GUIDE.md` - Email setup
-- `GETTING_STARTED.md` - Full guide
+## 📄 License
 
-## 🎉 What You Get
-
-From basic tracker → Professional AI-powered system:
-- ✅ 10x faster queries
-- ✅ Visual pipeline (Kanban)
-- ✅ AI recommendations
-- ✅ Interview prep tools
-- ✅ Calendar integration
-- ✅ Bulk operations
-- ✅ Smart search
-
-**Launch now:** `./run_ui.sh` 🚀
+[MIT](LICENSE) © 2026 Philipp Goetting

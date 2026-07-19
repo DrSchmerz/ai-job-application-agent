@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3:*)",
+      "Bash(rm:*)",
+      "Bash(PYTHONPATH=. python3:*)",
+      "Bash(pip install:*)",
+      "WebFetch(domain:modelcontextprotocol.github.io)",
+      "WebSearch",
+      "Bash(source .venv/bin/activate)",
+      "Bash(python:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "mcp__job-application-agent__list_applications",
+      "mcp__job-application-agent__get_application_stats",
+      "Bash(chmod:*)",
+      "Bash(ls:*)",
+      "Bash(sqlite3:*)",
+      "Bash(.venv/bin/python -c \"import ast; ast.parse\\(open\\('ui/app.py'\\).read\\(\\)\\); print\\('app.py OK'\\)\" && .venv/bin/python -c \"import ast; ast.parse\\(open\\('agent/agent.py'\\).read\\(\\)\\); print\\('agent.py OK'\\)\")",
+      "Bash(.venv/bin/python -c \"\nimport ast\nfor f in ['ui/app.py', 'ui/utils/styles.py', 'ui/components/tables.py']:\n    ast.parse\\(open\\(f\\).read\\(\\)\\)\n    print\\(f'✓ {f}'\\)\n\")"
+    ]
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "job-application-agent"
+  ]
+}

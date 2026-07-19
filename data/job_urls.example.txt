@@ -1,0 +1,5 @@
+# One job posting URL per line. Copy to data/job_urls.txt and add your own.
+# Lines starting with # are ignored.
+https://example.com/jobs/data-scientist
+https://example.com/jobs/ml-engineer
+https://example.com/jobs/ai-solutions-engineer
