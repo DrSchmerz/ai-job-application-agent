@@ -1,8 +1,16 @@
 # 🎯 AI Job Application Agent
 
+![CI](https://github.com/DrSchmerz/ai-job-application-agent/actions/workflows/ci.yml/badge.svg)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)
+
 An AI-powered assistant that manages a full job search end-to-end: track applications,
 generate tailored cover letters, analyse job–CV fit, ingest and classify recruiter
 emails, and prepare for interviews — all from one local Streamlit app.
+
+> **🧪 New — CV & Role Finder:** upload a CV → get recommended roles to target →
+> screen a job for fit. Works offline (local matching) or bring-your-own API key.
+> `streamlit run ui/cv_finder.py` — this is the first slice of a planned multi-user version.
 
 Built as a personal project to explore multi-provider LLM orchestration, the
 [Model Context Protocol (MCP)](https://modelcontextprotocol.io), and a clean
