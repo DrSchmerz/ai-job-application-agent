@@ -15,6 +15,6 @@ jobs:
           python-version: "3.13"
           cache: pip
       - name: Install test dependencies
-        run: pip install pytest
+        run: pip install pytest pypdf python-docx
       - name: Run tests
         run: python -m pytest tests/ -q
