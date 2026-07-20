@@ -3,10 +3,12 @@ Email Automation Module
 Handles automated email scanning, status updates, and notifications.
 """
 import os
+import re
 import sys
 import json
 import threading
 import time
+from collections import namedtuple
 from pathlib import Path
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
@@ -17,11 +19,44 @@ load_dotenv()
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from core.matching import skill_in_text
 from db.session import SessionLocal
 from db.models import Application, EmailAnalysis
 from tools.email_tracker import GmailTracker
 from tools.email_analyzer import EmailAnalyzer
 from tools.notifications import get_notifier
+
+# Lightweight, session-independent view of a matched application. Returning the
+# ORM object after closing the session (the old behavior) yielded a detached,
+# stale snapshot.
+MatchedApp = namedtuple("MatchedApp", ["id", "company", "role", "status"])
+
+# Corporate suffixes/filler that shouldn't count as identifying words
+_COMPANY_STOPWORDS = {
+    "the", "inc", "gmbh", "ag", "llc", "ltd", "co", "corp", "corporation",
+    "group", "plc", "se", "kg", "and",
+}
+
+
+def _company_matches(company: str, text: str) -> bool:
+    """Boundary-aware company/email match.
+
+    The old substring check made company "SAP" match sender
+    "asap-jobs@indeed.com" and "The Trade Desk" match any subject containing
+    "the" + "desk" — and then auto-updated the wrong application's status.
+    """
+    company_l = (company or "").lower().strip()
+    if not company_l:
+        return False
+    # Full company name as a phrase (word-boundary aware)
+    if skill_in_text(company_l, text):
+        return True
+    # Otherwise require ALL significant words of the name to appear as words
+    words = [
+        w for w in re.findall(r"[a-z0-9]+", company_l)
+        if len(w) > 2 and w not in _COMPANY_STOPWORDS
+    ]
+    return bool(words) and all(skill_in_text(w, text) for w in words)
 
 
 class EmailAutomation:
@@ -224,38 +259,39 @@ class EmailAutomation:
         finally:
             self.tracker.disconnect()
 
-    def _match_email_to_application(self, email_data: Dict) -> Optional[Application]:
+    def _match_email_to_application(self, email_data: Dict) -> Optional[MatchedApp]:
         """
         Try to match an email to an application in the database.
 
-        Uses company name matching from sender/subject.
+        Boundary-aware company matching (see _company_matches). Returns a
+        session-independent MatchedApp snapshot, never a detached ORM object.
         """
         db = SessionLocal()
         try:
-            # Extract company name from sender or subject
             sender = email_data.get("from", "").lower()
             subject = email_data.get("subject", "").lower()
+            text = f"{sender} {subject}"
 
-            # Get all applications
-            applications = db.query(Application).all()
+            # Newest first, so ties resolve to the most recent application
+            applications = db.query(Application).order_by(Application.id.desc()).all()
+            candidates = [a for a in applications if _company_matches(a.company, text)]
+            if not candidates:
+                return None
 
-            # Try to match by company name
-            for app in applications:
-                company_lower = app.company.lower()
+            # Multiple applications at the same company: prefer the one whose
+            # role words also appear in the subject; otherwise take the newest.
+            if len(candidates) > 1:
+                for app in candidates:
+                    role_words = [
+                        w for w in re.findall(r"[a-z0-9]+", (app.role or "").lower())
+                        if len(w) > 3
+                    ]
+                    if role_words and all(skill_in_text(w, subject) for w in role_words):
+                        candidates = [app]
+                        break
 
-                # Check if company name appears in sender or subject
-                if company_lower in sender or company_lower in subject:
-                    return app
-
-                # Check if any word from company appears (for multi-word companies)
-                company_words = company_lower.split()
-                if len(company_words) > 1:
-                    # Check if at least 2 words match
-                    matches = sum(1 for word in company_words if word in sender or word in subject)
-                    if matches >= 2:
-                        return app
-
-            return None
+            app = candidates[0]
+            return MatchedApp(id=app.id, company=app.company, role=app.role, status=app.status)
 
         except Exception as e:
             print(f"Error matching email: {e}")
@@ -263,7 +299,7 @@ class EmailAutomation:
         finally:
             db.close()
 
-    def _should_update_status(self, application: Application, email_data: Dict) -> bool:
+    def _should_update_status(self, application: MatchedApp, email_data: Dict) -> bool:
         """
         Determine if we should auto-update the application status.
 
@@ -276,8 +312,10 @@ class EmailAutomation:
         suggested_status = email_data.get("suggested_status")
         confidence = email_data.get("confidence", 0)
 
-        # Require high confidence for auto-updates
-        if confidence < 0.6:
+        # Require high confidence for auto-updates. Must be ABOVE the local
+        # classifier's single-keyword floor of 0.65 (email_analyzer), otherwise
+        # one occurrence of the word "interview" in a newsletter passes the gate.
+        if confidence < 0.7:
             return False
 
         # Don't update if already at suggested status

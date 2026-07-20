@@ -196,7 +196,7 @@ class GmailTracker:
 
         return emails
 
-    def scan_for_responses(self) -> List[Dict]:
+    def scan_for_responses(self, days_back: int = 30) -> List[Dict]:
         """
         Scan inbox for potential application responses.
         Looks for common response patterns.
@@ -216,15 +216,17 @@ class GmailTracker:
 
         all_emails = []
         for keyword in keywords:
-            emails = self.search_emails(subject_contains=keyword, days_back=30)
+            emails = self.search_emails(subject_contains=keyword, days_back=days_back)
             all_emails.extend(emails)
 
-        # Remove duplicates by subject
+        # Remove duplicates by (subject, sender) — subject alone dropped distinct
+        # emails that share a generic subject like "Update on your application".
         seen = set()
         unique_emails = []
         for e in all_emails:
-            if e["subject"] not in seen:
-                seen.add(e["subject"])
+            key = (e["subject"], e.get("from", ""))
+            if key not in seen:
+                seen.add(key)
                 unique_emails.append(e)
 
         return unique_emails
@@ -335,8 +337,9 @@ class GmailTracker:
             if not self.connect():
                 return []
 
-        # Get application-related emails
-        emails = self.scan_for_responses()
+        # Get application-related emails (days_back was previously ignored here —
+        # the UI's "days to analyze" slider had no effect)
+        emails = self.scan_for_responses(days_back=days_back)
 
         if not emails:
             return []
@@ -403,16 +406,41 @@ class GmailTracker:
         """
         db = SessionLocal()
         try:
-            # Parse received date
+            # Parse received date with the stdlib RFC-2822 parser. The old
+            # strptime("%a, %d %b %Y...") on date[:25] failed on single-digit
+            # days and missing weekdays, silently leaving received_date NULL
+            # (which then excluded those emails from recommendations).
             received_date = None
             if analysis.get("date"):
                 try:
-                    received_date = datetime.strptime(
-                        analysis["date"][:25],
-                        "%a, %d %b %Y %H:%M:%S"
-                    )
-                except:
+                    from email.utils import parsedate_to_datetime
+                    parsed = parsedate_to_datetime(analysis["date"])
+                    if parsed.tzinfo is not None:
+                        # store naive UTC — the rest of the app compares
+                        # against naive datetime.utcnow()
+                        from datetime import timezone
+                        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+                    received_date = parsed
+                except (ValueError, TypeError):
                     pass
+
+            # Dedup: automation rescans the same window every 30 minutes and
+            # used to re-insert an identical row per email, per scan, forever.
+            existing = (
+                db.query(EmailAnalysis)
+                .filter(
+                    EmailAnalysis.subject == analysis.get("subject", "")[:500],
+                    EmailAnalysis.sender == analysis.get("from", "")[:200],
+                    EmailAnalysis.received_date == received_date,
+                )
+                .first()
+            )
+            if existing:
+                # Backfill the application link if we matched one this time
+                if application_id and not existing.application_id:
+                    existing.application_id = application_id
+                    db.commit()
+                return existing.id
 
             # Create record
             email_analysis = EmailAnalysis(
