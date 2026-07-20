@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from db.session import SessionLocal
 from db.models import Application
-from core.matching import skill_in_text
+from core.matching import skill_in_text, compute_fit_score
 from tools.local_analyzer import (
     load_cv_summary, tokenize, extract_keywords,
     TECH_KEYWORDS, BUSINESS_KEYWORDS
@@ -98,14 +98,16 @@ def categorize_role(title: str, job_description: str) -> Dict:
     for category, config in ROLE_CATEGORIES.items():
         score = 0
 
-        # Check title patterns (weighted higher)
+        # Check title patterns (weighted higher). Boundary-aware: previously
+        # `"se" in title` gave +3 sales-engineer to any title containing "se"
+        # ("Senior Data Analyst", "Researcher").
         for pattern in config["title_patterns"]:
-            if pattern in title_lower:
+            if skill_in_text(pattern, title_lower):
                 score += 3
 
-        # Check description keywords
+        # Check description keywords (boundary-aware for the same reason)
         for keyword in config["keywords"]:
-            if keyword in combined:
+            if skill_in_text(keyword, combined):
                 score += 1
 
         scores[category] = score
@@ -123,13 +125,14 @@ def categorize_role(title: str, job_description: str) -> Dict:
         confidence = "low"
         best_category = "other"
 
-    # Determine seniority
+    # Determine seniority — boundary-aware, first level wins (senior is checked
+    # first). Previously `"i" in title` (substring) made every title containing
+    # the letter "i" — e.g. "Sen-i-or Engineer" — end up classified as junior.
     seniority = "mid"  # default
     for level, keywords in SENIORITY_KEYWORDS.items():
-        for kw in keywords:
-            if kw in title_lower:
-                seniority = level
-                break
+        if any(skill_in_text(kw, title_lower) for kw in keywords):
+            seniority = level
+            break
 
     return {
         "category": best_category,
@@ -231,30 +234,18 @@ def analyze_job(application: Application, cv_text: str = None) -> Dict:
         if skill_in_text(skill, cv_lower):
             business_match.append(skill)
 
-    # Calculate fit score
-    total_required = len(requirements["required_skills"])
-    matched_required = len(required_match)
-
-    if total_required > 0:
-        required_score = (matched_required / total_required) * 7  # Max 7 points
-    else:
-        required_score = 3.5  # Neutral
-
-    nice_score = min(len(nice_match) * 0.5, 2)  # Max 2 points
-    business_score = min(len(business_match) * 0.5, 1)  # Max 1 point
-
-    fit_score = round(required_score + nice_score + business_score)
-    fit_score = max(1, min(10, fit_score))
-
-    # Recommendation
-    if fit_score >= 8:
-        recommendation = "Strong Apply"
-    elif fit_score >= 6:
-        recommendation = "Apply"
-    elif fit_score >= 4:
-        recommendation = "Consider"
-    else:
-        recommendation = "Weak Fit"
+    # Canonical fit score — one formula everywhere (core.matching.compute_fit_score).
+    # This used to be a private 7/2/1 weighting that disagreed with Quick Screen's
+    # score for the same JD + CV.
+    nice_missing = [s for s in requirements["nice_to_have"] if s not in nice_match]
+    business_missing = [s for s in requirements["business_skills"] if s not in business_match]
+    fit_score, recommendation = compute_fit_score({
+        "technical": {
+            "matched": required_match + nice_match,
+            "missing": required_gap + nice_missing,
+        },
+        "business": {"matched": business_match, "missing": business_missing},
+    })
 
     return {
         "application_id": application.id,

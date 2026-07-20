@@ -106,21 +106,24 @@ class InterviewFeedback(Base):
 
 # Helper functions
 
+def _get_or_create_prep(db, application_id: int) -> InterviewPrep:
+    """Get or create the prep row using the CALLER's session (keeps it attached)."""
+    prep = db.query(InterviewPrep).filter(
+        InterviewPrep.application_id == application_id
+    ).first()
+    if not prep:
+        prep = InterviewPrep(application_id=application_id)
+        db.add(prep)
+        db.commit()
+        db.refresh(prep)
+    return prep
+
+
 def get_or_create_interview_prep(application_id: int) -> InterviewPrep:
     """Get existing interview prep or create new one."""
     db = SessionLocal()
     try:
-        prep = db.query(InterviewPrep).filter(
-            InterviewPrep.application_id == application_id
-        ).first()
-
-        if not prep:
-            prep = InterviewPrep(application_id=application_id)
-            db.add(prep)
-            db.commit()
-            db.refresh(prep)
-
-        return prep
+        return _get_or_create_prep(db, application_id)
     finally:
         db.close()
 
@@ -140,7 +143,10 @@ def update_interview_prep(
     """Update interview prep data."""
     db = SessionLocal()
     try:
-        prep = get_or_create_interview_prep(application_id)
+        # Use THIS session for get-or-create — previously this called the public
+        # helper, which used (and closed) its own session, returning a detached
+        # object whose edits were never persisted by the commit below.
+        prep = _get_or_create_prep(db, application_id)
 
         # Update provided fields
         if company_research is not None:

@@ -385,30 +385,15 @@ Provide a JSON response with:
 }}"""
 
     def _parse_json_response(self, text: str) -> dict:
-        """Parse JSON from LLM response, handling markdown code blocks."""
-        # Remove markdown code blocks if present
-        text = text.strip()
-        if text.startswith("```"):
-            lines = text.split("\n")
-            # Remove first and last lines (```json and ```)
-            text = "\n".join(lines[1:-1])
+        """Parse JSON from an LLM response (delegates to core.providers.parse_json).
 
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError:
-            # Try to extract JSON from text
-            import re
-            match = re.search(r'\{.*\}', text, re.DOTALL)
-            if match:
-                return json.loads(match.group())
-            # Return default if parsing fails
-            return {
-                "fit_score": 5,
-                "strengths": [],
-                "gaps": [],
-                "recommendation": "Consider",
-                "reasoning": "Could not parse AI response"
-            }
+        Raises ValueError on unparseable output. Callers (analyze_job_fit) catch this
+        and fall back to honest local analysis with a visible ``cloud_error`` — the old
+        behavior of returning a fabricated ``fit_score: 5`` presented a made-up result
+        as real AI analysis.
+        """
+        from core.providers import parse_json
+        return parse_json(text)
 
     # =========================================================================
     # CV SUGGESTIONS
@@ -641,7 +626,11 @@ Focus on patterns across ALL roles, not just one. Be specific and actionable."""
         from tools.local_analyzer import extract_keywords
         all_keywords: dict = {}
         for jd in job_descriptions:
-            for kw in extract_keywords(jd):
+            kws = extract_keywords(jd)
+            # extract_keywords returns a dict of lists — iterate the actual
+            # keywords (iterating the dict itself counted the CATEGORY NAMES,
+            # producing output like "technical (appears in N jobs)").
+            for kw in kws["technical"] + kws["business"]:
                 all_keywords[kw] = all_keywords.get(kw, 0) + 1
 
         top_keywords = sorted(all_keywords.items(), key=lambda x: x[1], reverse=True)[:30]

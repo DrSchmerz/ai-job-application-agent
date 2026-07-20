@@ -34,8 +34,19 @@ SessionLocal = sessionmaker(bind=engine)
 
 
 def init_db():
-    """Create tables and run lightweight column migrations."""
+    """Create ALL tables and run lightweight column migrations."""
+    # Import model modules so their tables register on Base.metadata BEFORE
+    # create_all — otherwise interview_prep/practice_questions/feedback tables
+    # are silently skipped on a fresh database.
+    import db.interview_prep  # noqa: F401  (registers models on the shared Base)
+
     Base.metadata.create_all(engine)
+
+    # TargetCompany historically lives on its OWN declarative Base (separate
+    # metadata), so the create_all above does not cover it.
+    from db.target_companies import Base as _TargetCompanyBase
+    _TargetCompanyBase.metadata.create_all(engine)
+
     _run_sqlite_migrations()
 
 
@@ -61,5 +72,8 @@ def _run_sqlite_migrations():
                 conn.commit()
                 log.debug("migration: added %s.%s", table, column)
             except Exception as exc:
-                if "duplicate column" not in str(exc).lower():
-                    pass  # column already exists — fine
+                if "duplicate column" in str(exc).lower():
+                    continue  # column already exists — expected on re-runs
+                # A real failure (locked DB, permissions, ...) must be visible,
+                # not swallowed — it surfaces later as "no such column" errors.
+                log.error("migration failed for %s.%s: %s", table, column, exc)

@@ -27,7 +27,7 @@ from tools.job_analyzer import batch_analyze_all, analyze_job, get_roles_by_cate
 from tools.email_tracker import GmailTracker, check_gmail_setup
 from tools.email_automation import get_automation
 from tools.job_scraper import JobScraper
-from db.session import SessionLocal
+from db.session import SessionLocal, init_db
 from db.models import Application
 from db.target_companies import (
     get_target_companies, add_target_company, update_target_company,
@@ -63,6 +63,9 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
+# Ensure tables exist (fresh clones previously crashed with "no such table")
+init_db()
 
 # Initialize session state
 init_session_state()
@@ -1920,6 +1923,9 @@ def show_new_application(provider: str):
             with col1:
                 if st.button("📋 View All Applications"):
                     reset_workflow()
+                    # Return to the list view — without this, the rerun lands the
+                    # user back on an empty wizard (app_view stays 'new_application').
+                    st.session_state.app_view = 'list'
                     st.rerun()
             with col2:
                 if st.button("✨ New Application"):
