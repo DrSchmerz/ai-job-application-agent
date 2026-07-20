@@ -68,6 +68,26 @@ class ApplicationHistory(Base):
     application = relationship("Application", back_populates="history")
 
 
+class JobPosting(Base):
+    """A job posting discovered by the target-company watcher (Greenhouse/Lever)."""
+    __tablename__ = "job_postings"
+
+    id = Column(Integer, primary_key=True)
+    company = Column(String, nullable=False)          # display name (from TargetCompany)
+    source = Column(String, nullable=False)           # greenhouse | lever
+    external_id = Column(String, nullable=False, index=True)  # posting id on the board
+    title = Column(String, nullable=False)
+    location = Column(String)
+    url = Column(String)
+    description = Column(Text)                        # plain-text excerpt for fit scoring
+
+    fit_score = Column(Float)                         # local fit vs. CV at discovery time
+    first_seen = Column(DateTime, default=datetime.utcnow)
+    last_seen = Column(DateTime, default=datetime.utcnow)
+    is_active = Column(Integer, default=1)            # 0 once it disappears from the board
+    dismissed = Column(Integer, default=0)            # user hid it
+
+
 class EmailAnalysis(Base):
     """Store LLM analysis of application-related emails."""
     __tablename__ = "email_analyses"

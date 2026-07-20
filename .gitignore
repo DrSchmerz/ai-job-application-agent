@@ -11,9 +11,10 @@ venv/
 .env.local
 *.key
 
-# --- Databases (local + demo) ---
+# --- Databases (local + demo) + backups ---
 *.db
 *.sqlite3
+backups/
 
 # --- Personal data (NEVER commit real job-hunt data) ---
 data/applications/

@@ -67,6 +67,10 @@ st.set_page_config(
 # Ensure tables exist (fresh clones previously crashed with "no such table")
 init_db()
 
+# Daily safety copy of the SQLite DB into backups/ (no-op if already done today)
+from db.backup import backup_database
+backup_database()
+
 # Initialize session state
 init_session_state()
 
@@ -693,9 +697,107 @@ def _render_application_details(app):
                     st.info("No interview feedback yet. Complete an interview and add your reflections!")
 
 
+def show_job_watcher():
+    """Watch target companies' Greenhouse/Lever boards for new postings."""
+    from db.models import JobPosting
+    from tools.job_watcher import check_target_companies
+
+    st.markdown("### 🎯 Target Company Watcher")
+    st.caption("Checks your target companies' official job boards (Greenhouse/Lever) and scores new postings against your CV.")
+
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        if st.button("🔄 Check for new roles", type="primary"):
+            with st.spinner("Checking target-company job boards..."):
+                summary = check_target_companies()
+            st.session_state.watcher_summary = summary
+            st.rerun()
+    with col2:
+        summary = st.session_state.get("watcher_summary")
+        if summary:
+            msg = (f"Checked **{summary['companies']}** companies · boards found: "
+                   f"**{summary['boards_found']}** · postings: **{summary['total']}** · "
+                   f"🆕 new: **{summary['new']}**")
+            st.markdown(msg)
+            if summary["no_board"]:
+                st.caption("No Greenhouse/Lever board found for: " + ", ".join(summary["no_board"])
+                           + " — set their `careers_url` in Target Companies to help detection.")
+
+    # Stored postings
+    db = SessionLocal()
+    try:
+        query = (
+            db.query(JobPosting)
+            .filter(JobPosting.is_active == 1, JobPosting.dismissed == 0)
+        )
+        total_active = query.count()
+        min_fit = st.slider("Minimum fit score", 1, 10, 5, key="watcher_min_fit") if total_active else 5
+        postings = (
+            query.filter((JobPosting.fit_score >= min_fit) | (JobPosting.fit_score.is_(None)))
+            .order_by(JobPosting.first_seen.desc(), JobPosting.fit_score.desc())
+            .limit(30)
+            .all()
+        )
+        rows = [
+            {"id": p.id, "company": p.company, "title": p.title, "location": p.location,
+             "url": p.url, "fit": p.fit_score, "first_seen": p.first_seen,
+             "description": p.description or ""}
+            for p in postings
+        ]
+    finally:
+        db.close()
+
+    if not total_active:
+        st.info("No postings yet — add companies under **Target Companies**, then hit "
+                "**Check for new roles**.")
+        return
+    if not rows:
+        st.caption(f"No postings at fit ≥ {min_fit} (of {total_active} active). Lower the slider to see more.")
+        return
+
+    st.caption(f"Showing {len(rows)} of {total_active} active postings (fit ≥ {min_fit}).")
+    week_ago = datetime.utcnow() - timedelta(days=7)
+    for row in rows:
+        with st.container(border=True):
+            c1, c2, c3, c4 = st.columns([5, 1, 1, 1])
+            with c1:
+                new_badge = " 🆕" if (row["first_seen"] and row["first_seen"] > week_ago) else ""
+                st.markdown(f"**{row['company']}** — [{row['title']}]({row['url']}){new_badge}")
+                meta = " · ".join(x for x in [row["location"],
+                                              row["first_seen"].strftime("%d %b") if row["first_seen"] else ""] if x)
+                if meta:
+                    st.caption(meta)
+            with c2:
+                st.metric("Fit", f"{row['fit']:.0f}/10" if row["fit"] else "—", label_visibility="collapsed")
+            with c3:
+                if st.button("➕ Track", key=f"track_posting_{row['id']}"):
+                    reset_workflow()
+                    wf = st.session_state.workflow
+                    wf['company'] = row["company"]
+                    wf['role'] = row["title"]
+                    wf['job_url'] = row["url"]
+                    wf['job_description'] = row["description"]
+                    st.session_state.app_view = 'new_application'
+                    st.rerun()
+            with c4:
+                if st.button("✕", key=f"dismiss_posting_{row['id']}", help="Hide this posting"):
+                    db = SessionLocal()
+                    try:
+                        p = db.query(JobPosting).filter(JobPosting.id == row["id"]).first()
+                        if p:
+                            p.dismissed = 1
+                            db.commit()
+                    finally:
+                        db.close()
+                    st.rerun()
+
+
 def show_job_search_tab():
-    """Job board search links + URL import (extracted from workflow.py)."""
+    """Target-company watcher + job board search links + URL import."""
     from tools.job_search import JobBoardSearch, get_popular_job_boards
+
+    show_job_watcher()
+    st.markdown("---")
 
     st.markdown("### 🔍 Search Job Boards")
 
