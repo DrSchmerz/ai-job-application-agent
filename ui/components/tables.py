@@ -10,11 +10,23 @@ _TD = "padding:7px 12px;border-bottom:1px solid #f0f0f0;vertical-align:middle;fo
 _TABLE = "width:100%;border-collapse:collapse;background:#fff;border:1px solid #e2e2e2;border-radius:4px;overflow:hidden;"
 
 
+def _text_color_for(bg_hex: str) -> str:
+    """Dark text on light backgrounds, white on dark. White-on-amber ('Applied')
+    and white-on-light-gray ('No Response') failed WCAG contrast badly."""
+    h = (bg_hex or "").lstrip("#")
+    try:
+        r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    except (ValueError, IndexError):
+        return "#fff"
+    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    return "#1f2937" if luminance > 0.55 else "#fff"
+
+
 def _status_badge(status: str) -> str:
     color = get_status_color(status)
     icon = STATUS_ICONS.get(status, "")
     return (
-        f'<span style="background:{color};color:#fff;padding:2px 8px;'
+        f'<span style="background:{color};color:{_text_color_for(color)};padding:2px 8px;'
         f'border-radius:3px;font-size:0.75rem;font-weight:500;white-space:nowrap;">'
         f'{icon} {status}</span>'
     )

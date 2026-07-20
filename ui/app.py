@@ -5,7 +5,7 @@ Enhanced with better styling, pagination, and email analysis.
 import streamlit as st
 import sys
 from pathlib import Path
-from datetime import datetime, date, time
+from datetime import datetime, date, time, timedelta
 import json
 
 # Add project root to path
@@ -100,7 +100,8 @@ def main():
 
     page = st.sidebar.radio(
         "Navigate",
-        ["📊 Dashboard", "📋 Applications", "📧 Email", "📝 CV & Insights", "⚙️ Settings"]
+        ["📊 Dashboard", "📋 Applications", "📧 Email", "📝 CV & Insights", "⚙️ Settings"],
+        key="nav_page",  # keyed so buttons can navigate programmatically
     )
 
     # Provider selector in sidebar - now persists
@@ -385,7 +386,7 @@ def _render_application_details(app):
                     status=new_status,
                     notes=new_notes
                 )
-                st.success("✅ Saved!")
+                st.toast("✅ Saved!")
                 st.rerun()
         with col2:
             if st.button("🗑️ Delete", key=f"delete_btn_{app.id}"):
@@ -402,7 +403,7 @@ def _render_application_details(app):
                     db.close()
                     # Clear confirmation state
                     st.session_state[f'confirm_delete_{app.id}'] = False
-                    st.success(f"✅ Deleted {app.company}")
+                    st.toast(f"✅ Deleted {app.company}")
                     st.rerun()
 
     # TAB 2: Cover Letter
@@ -510,7 +511,7 @@ def _render_application_details(app):
                         key_skills=key_skills,
                         relevant_experience=relevant_experience
                     )
-                    st.success("✅ Research notes saved!")
+                    st.toast("✅ Research notes saved!")
                     st.rerun()
 
             # PREP TAB 2: Practice Questions
@@ -548,7 +549,7 @@ def _render_application_details(app):
                                 question=new_question,
                                 question_type=q_type
                             )
-                            st.success("✅ Question added!")
+                            st.toast("✅ Question added!")
                             st.rerun()
 
                 # Show saved practice questions
@@ -581,7 +582,7 @@ def _render_application_details(app):
                                     prepared_answer=answer,
                                     confidence_level=confidence
                                 )
-                                st.success("✅ Answer saved!")
+                                st.toast("✅ Answer saved!")
                                 st.rerun()
                 else:
                     st.info("No practice questions yet. Add some above!")
@@ -600,13 +601,13 @@ def _render_application_details(app):
                 )
 
                 if st.button("▶️ Start Practice Session", key=f"start_timer_{app.id}"):
-                    st.info(f"⏱️ {timer_minutes} minute timer! Practice your answers out loud.")
-                    import time
-                    progress_bar = st.progress(0)
-                    for i in range(timer_minutes * 60):
-                        time.sleep(1)
-                        progress_bar.progress((i + 1) / (timer_minutes * 60))
-                    st.success("✅ Time's up! How did you do?")
+                    # Show the target end time instead of a blocking sleep-loop —
+                    # the old countdown froze the whole app for up to 10 minutes.
+                    end_time = datetime.now() + timedelta(minutes=timer_minutes)
+                    st.info(
+                        f"⏱️ Practice until **{end_time.strftime('%H:%M')}** "
+                        f"({timer_minutes} min) — answer out loud, then rate yourself below."
+                    )
 
             # PREP TAB 3: Post-Interview Feedback
             with prep_tabs[2]:
@@ -656,7 +657,7 @@ def _render_application_details(app):
                             confidence_after=confidence,
                             next_steps=next_steps
                         )
-                        st.success("✅ Feedback saved!")
+                        st.toast("✅ Feedback saved!")
                         st.rerun()
 
                 # Show previous feedback
@@ -782,30 +783,46 @@ def show_job_search_tab():
                 scraper = JobScraper()
                 result = scraper.scrape_job(job_url)
 
-                if result.get('success', True) and result.get('job_description'):
-                    st.success("✅ Job details extracted!")
-
-                    col1, col2 = st.columns(2)
-                    with col1:
-                        st.write(f"**Company:** {result.get('company', 'Unknown')}")
-                    with col2:
-                        st.write(f"**Role:** {result.get('role', 'Unknown')}")
-
-                    with st.expander("📄 View Job Description"):
-                        st.text_area(
-                            "Description",
-                            result['job_description'],
-                            height=200,
-                            label_visibility="collapsed"
-                        )
-
-                    if st.button("➕ Add to Applications", type="primary"):
-                        st.session_state.new_job_data = result
-                        st.success("✅ Job data saved! Click '+ New Application' to continue.")
-                else:
-                    st.error(f"❌ Failed to extract job details: {result.get('error', 'Unknown error')}")
+            if result.get('success', True) and result.get('job_description'):
+                # Persist the scrape so the result panel (and its Add button)
+                # survives Streamlit reruns. Previously the Add button was nested
+                # inside this branch and could never fire.
+                st.session_state.scraped_job = {**result, "url": job_url}
+            else:
+                st.session_state.pop("scraped_job", None)
+                st.error(f"❌ Failed to extract job details: {result.get('error', 'Unknown error')}")
         else:
             st.warning("Please enter a job URL")
+
+    scraped = st.session_state.get("scraped_job")
+    if scraped:
+        st.success("✅ Job details extracted!")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.write(f"**Company:** {scraped.get('company', 'Unknown')}")
+        with col2:
+            st.write(f"**Role:** {scraped.get('role', 'Unknown')}")
+
+        with st.expander("📄 View Job Description"):
+            st.text_area(
+                "Description",
+                scraped['job_description'],
+                height=200,
+                label_visibility="collapsed"
+            )
+
+        if st.button("➕ Add to Applications", type="primary"):
+            # Pre-fill the New Application wizard with the scraped job and open it.
+            reset_workflow()
+            wf = st.session_state.workflow
+            wf['company'] = scraped.get('company') or ''
+            wf['role'] = scraped.get('role') or ''
+            wf['job_url'] = scraped.get('url') or ''
+            wf['job_description'] = scraped.get('job_description') or ''
+            st.session_state.pop("scraped_job", None)
+            st.session_state.app_view = 'new_application'
+            st.rerun()
 
 
 def show_applications_page():
@@ -932,7 +949,7 @@ def show_applications():
                 count = len(st.session_state.selected_apps)
                 st.session_state.selected_apps = set()
                 st.session_state.confirm_bulk_delete = False
-                st.success(f"✅ Deleted {count} applications")
+                st.toast(f"✅ Deleted {count} applications")
                 st.rerun()
 
     st.markdown("---")
@@ -1161,12 +1178,16 @@ def show_applications():
         st.markdown("### 🎯 Application Pipeline")
         st.caption("Visual pipeline view - Click arrows to move applications between stages")
 
-        # Define status columns in pipeline order
+        # Define status columns in pipeline order. Must cover every ACTIVE status —
+        # "Technical Interview" and "Final Round" apps used to silently vanish
+        # from the board.
         pipeline_stages = [
             {"name": "Draft", "icon": "📝", "color": "#6B7280"},
             {"name": "Applied", "icon": "📤", "color": "#F59E0B"},
             {"name": "Phone Screen", "icon": "📞", "color": "#3B82F6"},
+            {"name": "Technical Interview", "icon": "💻", "color": "#8B5CF6"},
             {"name": "Interview", "icon": "🎯", "color": "#10B981"},
+            {"name": "Final Round", "icon": "🏁", "color": "#EC4899"},
             {"name": "Offer", "icon": "🎉", "color": "#059669"},
             {"name": "Accepted", "icon": "✅", "color": "#059669"},
         ]
@@ -1176,6 +1197,17 @@ def show_applications():
         status_groups = defaultdict(list)
         for app in applications:  # Use all applications, not paginated
             status_groups[app.status].append(app)
+
+        # Closed applications aren't board columns — but say so instead of
+        # letting them disappear silently.
+        closed_counts = {
+            s: len(status_groups.get(s, []))
+            for s in ("Rejected", "Withdrawn", "No Response")
+            if status_groups.get(s)
+        }
+        if closed_counts:
+            summary = " · ".join(f"{name}: {n}" for name, n in closed_counts.items())
+            st.caption(f"Not on the board (closed): {summary} — use Table view to see them.")
 
         # Create columns for each stage
         num_stages = len(pipeline_stages)
@@ -1304,8 +1336,14 @@ def show_job_insights():
     """Batch analysis and insights for all job applications."""
     st.title("📈 Job Insights & Analysis")
 
-    with st.spinner("Analyzing all job descriptions..."):
-        result = batch_analyze_all()
+    # Cache the batch analysis in the session — it used to re-run on every
+    # visit to this tab, making it feel slow before the user asked for anything.
+    if st.button("🔄 Refresh analysis"):
+        st.session_state.pop("job_insights_result", None)
+    if "job_insights_result" not in st.session_state:
+        with st.spinner("Analyzing all job descriptions..."):
+            st.session_state.job_insights_result = batch_analyze_all()
+    result = st.session_state.job_insights_result
 
     if result["total_analyzed"] == 0:
         st.warning("No applications with job descriptions found. Add some applications first!")
@@ -1749,7 +1787,7 @@ def show_new_application(provider: str):
                     if result.get('job_description'):
                         wf['job_description'] = result['job_description']
 
-                    st.success(f"✅ Fetched from {result.get('platform', 'website')}!")
+                    st.toast(f"✅ Fetched from {result.get('platform', 'website')}!")
                     st.rerun()
                 else:
                     st.error(f"Failed to fetch: {result.get('error', 'Unknown error')}")
@@ -2257,7 +2295,7 @@ def show_settings():
                     automation.notifications_enabled = notifications
                     automation.notifier.enabled = notifications
                     automation.start()
-                    st.success("Automation started!")
+                    st.toast("Automation started!")
                     st.rerun()
             else:
                 if st.button("⏹️ Stop Automation", type="secondary"):
@@ -2277,7 +2315,9 @@ def show_settings():
 
         with col3:
             if st.button("📊 View Email Analysis"):
-                set_page("Email Tracking")
+                # Navigate to the Email page (set_page() was the pagination
+                # helper — this button previously did nothing).
+                st.session_state.nav_page = "📧 Email"
                 st.rerun()
 
         # Info
@@ -2397,7 +2437,12 @@ def show_target_companies():
                     with col1:
                         if not company.applied:
                             if st.button("✨ Create Application", key=f"apply_{company.id}"):
-                                st.info("Navigate to '✨ New Application' and use company details")
+                                # Open the New Application wizard pre-filled with
+                                # this company (was a dead-end st.info before).
+                                reset_workflow()
+                                st.session_state.workflow['company'] = company.company_name
+                                st.session_state.app_view = 'new_application'
+                                st.rerun()
                     with col2:
                         new_status = st.selectbox(
                             "Update Status",
@@ -2407,7 +2452,7 @@ def show_target_companies():
                         )
                         if st.button("💾 Save Status", key=f"save_status_{company.id}"):
                             update_target_company(company.id, status=new_status)
-                            st.success("Status updated!")
+                            st.toast("Status updated!")
                             st.rerun()
                     with col3:
                         if st.button("🗑️ Delete", key=f"delete_btn_company_{company.id}"):
@@ -2418,7 +2463,7 @@ def show_target_companies():
                         if confirm_delete(company.company_name, key=f"delete_company_{company.id}"):
                             delete_target_company(company.id)
                             st.session_state[f'confirm_delete_company_{company.id}'] = False
-                            st.success(f"✅ Deleted {company.company_name}")
+                            st.toast(f"✅ Deleted {company.company_name}")
                             st.rerun()
         else:
             st.info("📭 No companies found. Add some companies to track!")
@@ -2482,7 +2527,7 @@ def show_target_companies():
                         why_interested=why_interested or None,
                         notes=notes or None
                     )
-                    st.success(f"✅ {company_name} added to target list!")
+                    st.toast(f"✅ {company_name} added to target list!")
                     st.rerun()
                 else:
                     st.error("Company name is required!")
@@ -2519,7 +2564,7 @@ def show_target_companies():
                     added += 1
                 except Exception:
                     skipped += 1
-            st.success(f"✅ Imported {added} companies" + (f" ({skipped} skipped)" if skipped else ""))
+            st.toast(f"✅ Imported {added} companies" + (f" ({skipped} skipped)" if skipped else ""))
             st.rerun()
 
 
